@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Nicko's Park</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;overflow:hidden;overscroll-behavior:none}
+  #game{position:fixed;inset:0;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;
+    background:linear-gradient(#8ED8F8 0%,#BDE9FB 45%,#D8F3FD 58%,#8FD694 58.2%,#7CCB82 100%)}
+  #bg{position:absolute;inset:0;width:100%;height:100%;z-index:0}
+  .sprite{position:absolute;transform:translate(-50%,-50%);touch-action:none;z-index:10;filter:drop-shadow(0 6px 6px rgba(46,42,38,.18))}
+  .sprite svg{display:block;width:100%;height:auto;overflow:visible}
+  .lift{filter:drop-shadow(0 14px 10px rgba(46,42,38,.28));z-index:35 !important}
+  .lift svg{transform:scale(1.12)}
+  .sprite svg{transition:transform .15s ease}
+
+  /* idle + ambient animations */
+  @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-4%)}}
+  .bob{animation:bob 2.4s ease-in-out infinite}
+  @keyframes sway{0%,100%{transform:rotate(-2deg)}50%{transform:rotate(2deg)}}
+  .sway{animation:sway 5s ease-in-out infinite;transform-origin:50% 90%}
+  @keyframes drift{from{transform:translateX(-18vw)}to{transform:translateX(118vw)}}
+  .cloud{animation:drift linear infinite}
+  @keyframes spinSlow{to{transform:rotate(360deg)}}
+  .rays{animation:spinSlow 24s linear infinite;transform-origin:center;transform-box:fill-box}
+  @keyframes blink{0%,92%,100%{transform:scaleY(1)}95%{transform:scaleY(.08)}}
+  .eyes{animation:blink 4.5s ease-in-out infinite;transform-box:fill-box;transform-origin:center}
+  @keyframes flap{0%,100%{transform:scaleX(1)}50%{transform:scaleX(.35)}}
+  .wingL{animation:flap .5s ease-in-out infinite;transform-origin:100% 50%;transform-box:fill-box}
+  .wingR{animation:flap .5s ease-in-out infinite;transform-origin:0% 50%;transform-box:fill-box}
+  @keyframes wiggle{0%,100%{transform:rotate(0)}25%{transform:rotate(-8deg)}75%{transform:rotate(8deg)}}
+  .happy{animation:wiggle .45s ease-in-out 3}
+  @keyframes hopSquash{0%{transform:scale(1,1)}40%{transform:scale(1.15,.8)}100%{transform:scale(1,1)}}
+  .squash{animation:hopSquash .3s ease}
+  @keyframes floaty{0%,100%{transform:translateY(0) rotate(-3deg)}50%{transform:translateY(-8px) rotate(3deg)}}
+  .floaty{animation:floaty 3s ease-in-out infinite}
+  @keyframes ripple{0%{transform:scale(.3);opacity:.8}100%{transform:scale(1.6);opacity:0}}
+  .ripple{position:absolute;border:4px solid rgba(255,255,255,.9);border-radius:50%;pointer-events:none;z-index:5;animation:ripple .9s ease-out forwards}
+  @keyframes riseFade{0%{transform:translate(-50%,-30%) scale(.4);opacity:0}25%{opacity:1}100%{transform:translate(-50%,-140%) scale(1.1);opacity:0}}
+  .particle{position:absolute;z-index:40;pointer-events:none;animation:riseFade 1s ease-out forwards}
+  @keyframes sparkleFly{0%{transform:translate(0,0) scale(1);opacity:1}100%{transform:translate(var(--dx),var(--dy)) scale(.2);opacity:0}}
+  .spark{position:absolute;z-index:40;pointer-events:none;animation:sparkleFly .8s ease-out forwards}
+  @keyframes rainFall{from{transform:translateY(-4vh)}to{transform:translateY(70vh)}}
+  .raindrop{position:absolute;top:0;width:3px;height:26px;background:rgba(120,180,230,.75);border-radius:2px;z-index:6;pointer-events:none;animation:rainFall .7s linear infinite}
+  @keyframes rainbowIn{from{opacity:0;transform:scale(.85)}to{opacity:1;transform:scale(1)}}
+
+  /* HUD */
+  #hud{position:absolute;top:calc(10px + env(safe-area-inset-top));right:12px;z-index:50;display:flex;gap:10px}
+  .hbtn{width:52px;height:52px;border-radius:50%;background:#fff;border:3px solid #2E2A26;display:flex;align-items:center;justify-content:center;box-shadow:3px 3px 0 #2E2A26;cursor:pointer;touch-action:manipulation}
+  .hbtn:active{transform:translate(2px,2px);box-shadow:1px 1px 0 #2E2A26}
+  .hbtn svg{width:26px;height:26px}
+</style>
+</head>
+<body>
+<div id="game">
+  <!-- ======== BACKGROUND SCENE ======== -->
+  <svg id="bg" viewBox="0 0 100 160" preserveAspectRatio="xMidYMid slice">
+    <!-- sun -->
+    <g id="sunG" transform="translate(14,16)">
+      <g class="rays" stroke="#FFD93B" stroke-width="2.4" stroke-linecap="round">
+        <line x1="0" y1="-11" x2="0" y2="-16"/><line x1="0" y1="11" x2="0" y2="16"/>
+        <line x1="-11" y1="0" x2="-16" y2="0"/><line x1="11" y1="0" x2="16" y2="0"/>
+        <line x1="-8" y1="-8" x2="-11.5" y2="-11.5"/><line x1="8" y1="-8" x2="11.5" y2="-11.5"/>
+        <line x1="-8" y1="8" x2="-11.5" y2="11.5"/><line x1="8" y1="8" x2="11.5" y2="11.5"/>
+      </g>
+      <circle r="8" fill="#FFD93B" stroke="#F0A92E" stroke-width="1.5"/>
+      <circle cx="-2.5" cy="-1.5" r="1.4" fill="#2E2A26"/><circle cx="2.5" cy="-1.5" r="1.4" fill="#2E2A26"/>
+      <path d="M-3,3 Q0,5.5 3,3" stroke="#2E2A26" stroke-width="1.2" fill="none" stroke-linecap="round"/>
+    </g>
+    <!-- rainbow (hidden until rain) -->
+    <g id="rainbow" opacity="0" transform="translate(72,58)">
+      <path d="M-22,10 A24,24 0 0 1 22,10" stroke="#F0504D" stroke-width="3.4" fill="none"/>
+      <path d="M-18.5,10 A20.5,20.5 0 0 1 18.5,10" stroke="#FF9F43" stroke-width="3.4" fill="none"/>
+      <path d="M-15,10 A17,17 0 0 1 15,10" stroke="#FFD93B" stroke-width="3.4" fill="none"/>
+      <path d="M-11.5,10 A13.5,13.5 0 0 1 11.5,10" stroke="#7CCB82" stroke-width="3.4" fill="none"/>
+      <path d="M-8,10 A10,10 0 0 1 8,10" stroke="#6FB7FF" stroke-width="3.4" fill="none"/>
+    </g>
+    <!-- clouds (drift via CSS on wrapper divs instead) -->
+    <!-- pond -->
+    <ellipse cx="20" cy="118" rx="17" ry="9" fill="#6FC7E8" stroke="#4AA8D0" stroke-width="1.5"/>
+    <ellipse cx="20" cy="117" rx="11" ry="5.5" fill="#A5E3F5" opacity=".8"/>
+    <ellipse id="lily" cx="26" cy="119" rx="4.4" ry="2.4" fill="#5FBF6B"/>
+    <circle cx="24.6" cy="118.4" r="1.1" fill="#FF8FB2"/>
+    <!-- winding path -->
+    <path d="M50,160 C48,140 40,132 34,124 C30,119 26,118 22,118" stroke="#EBCB93" stroke-width="7" fill="none" stroke-linecap="round"/>
+    <path d="M50,160 C48,140 40,132 34,124" stroke="#E0B978" stroke-width="1.6" fill="none" stroke-dasharray="3 4"/>
+    <!-- grass tufts -->
+    <g stroke="#5FBF6B" stroke-width="1.6" stroke-linecap="round">
+      <path d="M8,140 l1.5,-4 M10.5,140 l0,-4.5 M13,140 l-1.5,-4"/>
+      <path d="M60,132 l1.5,-4 M62.5,132 l0,-4.5 M65,132 l-1.5,-4"/>
+      <path d="M88,142 l1.5,-4 M90.5,142 l0,-4.5 M93,142 l-1.5,-4"/>
+      <path d="M40,148 l1.5,-4 M42.5,148 l0,-4.5 M45,148 l-1.5,-4"/>
+    </g>
+  </svg>
+
+  <!-- drifting clouds as HTML for CSS animation -->
+  <div class="sprite cloud" id="cloud1" style="left:0%;top:9%;width:26vmin;z-index:1;animation-duration:47s;pointer-events:auto">
+    <svg viewBox="0 0 120 60"><g fill="#fff" opacity=".95"><ellipse cx="35" cy="38" rx="24" ry="15"/><ellipse cx="60" cy="30" rx="28" ry="19"/><ellipse cx="88" cy="40" rx="20" ry="13"/></g></svg>
+  </div>
+  <div class="sprite cloud" id="cloud2" style="left:0%;top:22%;width:19vmin;z-index:1;animation-duration:68s;animation-delay:-30s;pointer-events:auto">
+    <svg viewBox="0 0 120 60"><g fill="#fff" opacity=".9"><ellipse cx="35" cy="38" rx="24" ry="15"/><ellipse cx="60" cy="30" rx="28" ry="19"/><ellipse cx="88" cy="40" rx="20" ry="13"/></g></svg>
+  </div>
+
+  <div id="hud">
+    <div class="hbtn" id="soundBtn" title="sound">
+      <svg viewBox="0 0 24 24" id="soundIcon"><path d="M4 9v6h4l5 4V5L8 9H4z" fill="#2E2A26"/><path id="soundWaves" d="M16 9c1.2 1.6 1.2 4.4 0 6M18.5 7c2 2.6 2 7.4 0 10" stroke="#2E2A26" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
+    </div>
+    <div class="hbtn" id="resetBtn" title="reset">
+      <svg viewBox="0 0 24 24"><path d="M12 13c-2.8 0-5.5 1.1-5.5 3.2 0 1.5 1.2 2.3 2.6 2.3 1 0 1.7-.5 2.9-.5s1.9.5 2.9.5c1.4 0 2.6-.8 2.6-2.3 0-2.1-2.7-3.2-5.5-3.2z" fill="#2E2A26"/><ellipse cx="5.5" cy="10" rx="1.8" ry="2.4" fill="#2E2A26"/><ellipse cx="9.5" cy="6.8" rx="1.8" ry="2.4" fill="#2E2A26"/><ellipse cx="14.5" cy="6.8" rx="1.8" ry="2.4" fill="#2E2A26"/><ellipse cx="18.5" cy="10" rx="1.8" ry="2.4" fill="#2E2A26"/></svg>
+    </div>
+  </div>
+
+  <!-- ======== SPRITES (positioned by JS in viewBox units) ======== -->
+  <div class="sprite sway" id="tree" data-w="52">
+    <svg viewBox="0 0 120 150">
+      <rect x="52" y="78" width="16" height="66" rx="8" fill="#9A6B4F"/>
+      <path d="M60,100 C40,96 28,104 22,96" stroke="#9A6B4F" stroke-width="9" fill="none" stroke-linecap="round"/>
+      <circle cx="60" cy="52" r="34" fill="#5FBF6B"/>
+      <circle cx="34" cy="62" r="24" fill="#6FCF7C"/>
+      <circle cx="86" cy="62" r="24" fill="#55B364"/>
+      <circle cx="48" cy="40" r="8" fill="#7CD68A" opacity=".8"/><circle cx="76" cy="44" r="7" fill="#7CD68A" opacity=".8"/>
+    </svg>
+  </div>
+
+  <div class="sprite floaty" id="kite" data-w="15">
+    <svg viewBox="0 0 90 110">
+      <path d="M45,4 L82,44 L45,84 L8,44 Z" fill="#F0504D"/>
+      <path d="M45,4 L45,84 M8,44 L82,44" stroke="#FFD93B" stroke-width="4"/>
+      <circle cx="45" cy="44" r="6" fill="#FFD93B"/>
+      <path d="M45,84 q-6,10 2,16 q8,6 4,12" stroke="#2E2A26" stroke-width="2.4" fill="none"/>
+      <path d="M43,96 l-7,3 l7,4 z M47,106 l-7,3 l7,4 z" fill="#3FB6B2"/>
+    </svg>
+  </div>
+
+  <div class="sprite bob" id="bird" data-w="13">
+    <svg viewBox="0 0 90 90">
+      <ellipse cx="45" cy="52" rx="26" ry="24" fill="#6FB7FF"/>
+      <ellipse id="birdWing" cx="34" cy="54" rx="12" ry="9" fill="#4A90D9"/>
+      <path d="M20,44 L6,38 L18,52 Z" fill="#4A90D9"/>
+      <circle cx="58" cy="34" r="16" fill="#6FB7FF"/>
+      <g class="eyes"><circle cx="62" cy="32" r="4" fill="#2E2A26"/><circle cx="63.4" cy="30.6" r="1.4" fill="#fff"/></g>
+      <path d="M72,36 L82,39 L72,43 Z" fill="#FF9F43"/>
+      <path d="M52,48 q4,3 8,0" stroke="#2E2A26" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+      <line x1="38" y1="75" x2="38" y2="84" stroke="#FF9F43" stroke-width="3" stroke-linecap="round"/>
+      <line x1="50" y1="75" x2="50" y2="84" stroke="#FF9F43" stroke-width="3" stroke-linecap="round"/>
+      <path d="M52,14 q6,-8 12,-6" stroke="#4A90D9" stroke-width="3" fill="none" stroke-linecap="round"/>
+      <circle cx="65" cy="7" r="3.4" fill="#F0504D"/>
+    </svg>
+  </div>
+
+  <div class="sprite" id="flower1" data-w="11">
+    <svg viewBox="0 0 60 90">
+      <line x1="30" y1="40" x2="30" y2="86" stroke="#4E9E58" stroke-width="5" stroke-linecap="round"/>
+      <path d="M30,66 q-12,-2 -16,-12 q12,-2 16,12" fill="#5FBF6B"/>
+      <g><ellipse cx="30" cy="18" rx="8" ry="12" fill="#FF8FB2"/><ellipse cx="30" cy="18" rx="8" ry="12" fill="#FF8FB2" transform="rotate(60 30 30)"/><ellipse cx="30" cy="18" rx="8" ry="12" fill="#FF8FB2" transform="rotate(120 30 30)"/><ellipse cx="30" cy="18" rx="8" ry="12" fill="#FF8FB2" transform="rotate(180 30 30)"/><ellipse cx="30" cy="18" rx="8" ry="12" fill="#FF8FB2" transform="rotate(240 30 30)"/><ellipse cx="30" cy="18" rx="8" ry="12" fill="#FF8FB2" transform="rotate(300 30 30)"/></g>
+      <circle cx="30" cy="30" r="8" fill="#FFD93B" stroke="#F0A92E" stroke-width="2"/>
+    </svg>
+  </div>
+  <div class="sprite" id="flower2" data-w="11">
+    <svg viewBox="0 0 60 90">
+      <line x1="30" y1="40" x2="30" y2="86" stroke="#4E9E58" stroke-width="5" stroke-linecap="round"/>
+      <path d="M30,66 q12,-2 16,-12 q-12,-2 -16,12" fill="#5FBF6B"/>
+      <g><ellipse cx="30" cy="18" rx="8" ry="12" fill="#C79BF2"/><ellipse cx="30" cy="18" rx="8" ry="12" fill="#C79BF2" transform="rotate(60 30 30)"/><ellipse cx="30" cy="18" rx="8" ry="12" fill="#C79BF2" transform="rotate(120 30 30)"/><ellipse cx="30" cy="18" rx="8" ry="12" fill="#C79BF2" transform="rotate(180 30 30)"/><ellipse cx="30" cy="18" rx="8" ry="12" fill="#C79BF2" transform="rotate(240 30 30)"/><ellipse cx="30" cy="18" rx="8" ry="12" fill="#C79BF2" transform="rotate(300 30 30)"/></g>
+      <circle cx="30" cy="30" r="8" fill="#FF9F43" stroke="#E07B2E" stroke-width="2"/>
+    </svg>
+  </div>
+  <div class="sprite" id="flower3" data-w="11">
+    <svg viewBox="0 0 60 90">
+      <line x1="30" y1="40" x2="30" y2="86" stroke="#4E9E58" stroke-width="5" stroke-linecap="round"/>
+      <path d="M30,66 q-12,-2 -16,-12 q12,-2 16,12" fill="#5FBF6B"/>
+      <g><ellipse cx="30" cy="18" rx="8" ry="12" fill="#7FD4F2"/><ellipse cx="30" cy="18" rx="8" ry="12" fill="#7FD4F2" transform="rotate(60 30 30)"/><ellipse cx="30" cy="18" rx="8" ry="12" fill="#7FD4F2" transform="rotate(120 30 30)"/><ellipse cx="30" cy="18" rx="8" ry="12" fill="#7FD4F2" transform="rotate(180 30 30)"/><ellipse cx="30" cy="18" rx="8" ry="12" fill="#7FD4F2" transform="rotate(240 30 30)"/><ellipse cx="30" cy="18" rx="8" ry="12" fill="#7FD4F2" transform="rotate(300 30 30)"/></g>
+      <circle cx="30" cy="30" r="8" fill="#FFD93B" stroke="#F0A92E" stroke-width="2"/>
+    </svg>
+  </div>
+
+  <div class="sprite" id="can" data-w="15">
+    <svg viewBox="0 0 110 90">
+      <path d="M22,32 L10,62" stroke="#7C8DA0" stroke-width="10" stroke-linecap="round"/>
+      <circle cx="8" cy="66" r="7" fill="#7C8DA0"/>
+      <rect x="22" y="30" width="56" height="48" rx="12" fill="#8FA3B8"/>
+      <rect x="22" y="30" width="56" height="14" rx="7" fill="#9DB2C7"/>
+      <path d="M78,38 q22,4 18,26 q-2,10 -14,10" stroke="#7C8DA0" stroke-width="9" fill="none" stroke-linecap="round"/>
+      <rect x="46" y="18" width="10" height="14" rx="4" fill="#7C8DA0"/>
+    </svg>
+  </div>
+
+  <div class="sprite" id="bin" data-w="14">
+    <svg viewBox="0 0 80 100">
+      <path d="M18,30 L62,30 L56,92 L24,92 Z" fill="#8E7CF0"/>
+      <rect x="12" y="20" width="56" height="12" rx="6" fill="#7A68D8"/>
+      <rect x="34" y="8" width="12" height="14" rx="5" fill="#7A68D8"/>
+      <line x1="32" y1="42" x2="30" y2="80" stroke="#A793F5" stroke-width="5" stroke-linecap="round"/>
+      <line x1="48" y1="42" x2="50" y2="80" stroke="#A793F5" stroke-width="5" stroke-linecap="round"/>
+    </svg>
+  </div>
+
+  <div class="sprite" id="trash" data-w="8">
+    <svg viewBox="0 0 60 50"><path d="M10,30 L18,12 L30,20 L42,8 L50,26 L38,34 L24,30 Z" fill="#D9D2C5" stroke="#B8AE99" stroke-width="2"/><path d="M18,12 L24,30 M30,20 L38,34" stroke="#B8AE99" stroke-width="1.6"/></svg>
+  </div>
+
+  <div class="sprite" id="ball" data-w="11">
+    <svg viewBox="0 0 80 80"><circle cx="40" cy="40" r="34" fill="#FFD93B" stroke="#F0A92E" stroke-width="3"/><path d="M12,30 Q40,44 68,30" stroke="#F0504D" stroke-width="7" fill="none"/><path d="M12,52 Q40,38 68,52" stroke="#3FB6B2" stroke-width="7" fill="none"/></svg>
+  </div>
+
+  <div class="sprite bob" id="bunny" data-w="14">
+    <svg viewBox="0 0 100 110">
+      <ellipse cx="72" cy="30" rx="9" ry="24" fill="#FDF6EC" transform="rotate(12 72 30)"/>
+      <ellipse cx="72" cy="30" rx="4" ry="16" fill="#F5A8B8" transform="rotate(12 72 30)"/>
+      <ellipse cx="52" cy="34" rx="9" ry="24" fill="#FDF6EC" transform="rotate(-10 52 34)"/>
+      <ellipse cx="52" cy="34" rx="4" ry="16" fill="#F5A8B8" transform="rotate(-10 52 34)"/>
+      <ellipse cx="55" cy="82" rx="30" ry="24" fill="#FDF6EC"/>
+      <circle cx="72" cy="60" r="24" fill="#FDF6EC"/>
+      <circle cx="30" cy="86" r="9" fill="#fff"/>
+      <g class="eyes"><circle cx="64" cy="56" r="4.5" fill="#2E2A26"/><circle cx="65.5" cy="54.5" r="1.5" fill="#fff"/></g>
+      <ellipse cx="56" cy="64" rx="3.4" ry="2.6" fill="#F0838F"/>
+      <rect x="40" y="98" width="12" height="10" rx="5" fill="#EAD9C2"/>
+      <rect x="58" y="98" width="12" height="10" rx="5" fill="#EAD9C2"/>
+    </svg>
+  </div>
+
+  <div class="sprite" id="frog" data-w="10">
+    <svg viewBox="0 0 90 64">
+      <ellipse cx="45" cy="40" rx="30" ry="20" fill="#6FCF7C"/>
+      <circle cx="28" cy="22" r="11" fill="#6FCF7C"/><circle cx="62" cy="22" r="11" fill="#6FCF7C"/>
+      <g class="eyes"><circle cx="28" cy="22" r="5" fill="#fff"/><circle cx="28" cy="23" r="2.6" fill="#2E2A26"/><circle cx="62" cy="22" r="5" fill="#fff"/><circle cx="62" cy="23" r="2.6" fill="#2E2A26"/></g>
+      <path d="M34,44 q11,8 22,0" stroke="#2E7B44" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+      <circle cx="34" cy="34" r="4" fill="#8FDD9A" opacity=".7"/><circle cx="56" cy="34" r="4" fill="#8FDD9A" opacity=".7"/>
+    </svg>
+  </div>
+
+  <div class="sprite" id="nicko" data-w="21" style="z-index:30">
+    <svg viewBox="0 0 140 120">
+      <path d="M28,86 C12,84 8,66 18,58 C24,52 32,54 32,62" stroke="#8E97A6" stroke-width="11" fill="none" stroke-linecap="round"/>
+      <circle cx="19" cy="57" r="6.5" fill="#6E7683"/>
+      <rect x="42" y="92" width="14" height="20" rx="7" fill="#8E97A6"/>
+      <rect x="74" y="92" width="14" height="20" rx="7" fill="#8E97A6"/>
+      <ellipse cx="66" cy="78" rx="38" ry="27" fill="#A7B0BE"/>
+      <path d="M48,58 q4,8 0,14 M60,55 q4,8 0,14" stroke="#7C8594" stroke-width="5" fill="none" stroke-linecap="round"/>
+      <rect x="96" y="90" width="13" height="22" rx="6.5" fill="#9AA3B2"/>
+      <circle cx="104" cy="44" r="28" fill="#A7B0BE"/>
+      <path d="M84,26 L80,6 L98,18 Z" fill="#A7B0BE"/>
+      <path d="M124,26 L128,6 L110,18 Z" fill="#A7B0BE"/>
+      <path d="M86,22 L84,12 L94,19 Z" fill="#F5A8B8"/>
+      <path d="M122,22 L124,12 L114,19 Z" fill="#F5A8B8"/>
+      <path d="M98,18 q2,6 0,10 M106,17 q2,6 0,10" stroke="#7C8594" stroke-width="4" fill="none" stroke-linecap="round"/>
+      <path d="M78,62 L130,62 L104,92 Z" fill="#F0504D"/>
+      <circle cx="104" cy="62" r="6" fill="#D63D3A"/>
+      <g class="eyes">
+        <circle cx="94" cy="42" r="5.5" fill="#2E2A26"/><circle cx="96" cy="40" r="1.8" fill="#fff"/>
+        <circle cx="114" cy="42" r="5.5" fill="#2E2A26"/><circle cx="116" cy="40" r="1.8" fill="#fff"/>
+      </g>
+      <path d="M102,52 l4,0 l-2,3.5 z" fill="#F0838F"/>
+      <path d="M104,55.5 q-3,4 -8,2 M104,55.5 q3,4 8,2" stroke="#2E2A26" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+      <g stroke="#2E2A26" stroke-width="1.4" opacity=".45" stroke-linecap="round">
+        <line x1="78" y1="46" x2="62" y2="42"/><line x1="78" y1="52" x2="63" y2="54"/>
+        <line x1="130" y1="46" x2="146" y2="42"/><line x1="130" y1="52" x2="145" y2="54"/>
+      </g>
+    </svg>
+  </div>
+
+  <div class="sprite" id="bfly1" data-w="7" style="z-index:12">
+    <svg viewBox="0 0 60 50">
+      <ellipse class="wingL" cx="20" cy="24" rx="15" ry="18" fill="#C79BF2"/>
+      <ellipse class="wingR" cx="40" cy="24" rx="15" ry="18" fill="#B388EB"/>
+      <circle cx="20" cy="20" r="4" fill="#fff" opacity=".6"/><circle cx="40" cy="20" r="4" fill="#fff" opacity=".6"/>
+      <rect x="27" y="10" width="6" height="30" rx="3" fill="#2E2A26"/>
+      <circle cx="30" cy="10" r="5" fill="#2E2A26"/>
+    </svg>
+  </div>
+  <div class="sprite" id="bfly2" data-w="7" style="z-index:12">
+    <svg viewBox="0 0 60 50">
+      <ellipse class="wingL" cx="20" cy="24" rx="15" ry="18" fill="#FFB3D9"/>
+      <ellipse class="wingR" cx="40" cy="24" rx="15" ry="18" fill="#FF9FCF"/>
+      <circle cx="20" cy="20" r="4" fill="#fff" opacity=".6"/><circle cx="40" cy="20" r="4" fill="#fff" opacity=".6"/>
+      <rect x="27" y="10" width="6" height="30" rx="3" fill="#2E2A26"/>
+      <circle cx="30" cy="10" r="5" fill="#2E2A26"/>
+    </svg>
+  </div>
+</div><!-- /#game -->
+
+<script>
+(function(){
+"use strict";
+const game = document.getElementById('game');
+
+/* ---------- coordinate system: everything lives in 100x160 viewBox units ---------- */
+let S = 1, OX = 0, OY = 0; // scale + offsets mapping viewBox -> px
+function measure(){
+  const w = game.clientWidth, h = game.clientHeight;
+  S = Math.max(w/100, h/160);
+  OX = (w - 100*S)/2; OY = (h - 160*S)/2;
+}
+function toPx(x,y){ return [OX + x*S, OY + y*S]; }
+function toUnits(px,py){ return [(px-OX)/S, (py-OY)/S]; }
+const sprites = {};
+document.querySelectorAll('.sprite[data-w]').forEach(el=>{
+  sprites[el.id] = el;
+  el._w = parseFloat(el.dataset.w);
+});
+function place(el, x, y){
+  el._x = x; el._y = y;
+  const [px,py] = toPx(x,y);
+  el.style.left = px+'px'; el.style.top = py+'px';
+  el.style.width = (el._w*S)+'px';
+}
+function layout(){ for(const id in sprites){ const el=sprites[id]; if(el._x!==undefined) place(el, el._x, el._y); } }
+window.addEventListener('resize', ()=>{ measure(); layout(); });
+
+/* ---------- audio: everything synthesized, no files ---------- */
+let AC=null, muted=false;
+function wakeAudio(){
+  if(!AC){ try{ AC = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} }
+  if(AC && AC.state==='suspended') AC.resume();
+}
+function tone(f,d,type,v,slide){
+  if(!AC||muted) return;
+  type=type||'sine'; v=v||0.2;
+  const o=AC.createOscillator(), g=AC.createGain(), t=AC.currentTime;
+  o.type=type; o.frequency.setValueAtTime(f,t);
+  if(slide) o.frequency.exponentialRampToValueAtTime(slide,t+d);
+  g.gain.setValueAtTime(v,t); g.gain.exponentialRampToValueAtTime(0.001,t+d);
+  o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t+d+0.02);
+}
+function noiseBurst(dur,cutoff,vol){
+  if(!AC||muted) return;
+  const len=Math.floor(AC.sampleRate*dur), buf=AC.createBuffer(1,len,AC.sampleRate), d=buf.getChannelData(0);
+  for(let i=0;i<len;i++) d[i]=(Math.random()*2-1)*(1-i/len);
+  const src=AC.createBufferSource(); src.buffer=buf;
+  const f=AC.createBiquadFilter(); f.type='lowpass'; f.frequency.value=cutoff;
+  const g=AC.createGain(); g.gain.value=vol;
+  src.connect(f); f.connect(g); g.connect(AC.destination); src.start();
+}
+const sfx = {
+  pop(){ tone(520,0.1,'triangle',0.25,880); },
+  boing(){ tone(280,0.28,'sine',0.28,110); },
+  plip(){ tone(750,0.14,'sine',0.22,280); },
+  splash(){ noiseBurst(0.45,900,0.3); },
+  happy(){ [523,659,784,1047].forEach((f,i)=>setTimeout(()=>tone(f,0.16,'triangle',0.2),i*95)); },
+  chime(){ tone(1320,0.35,'sine',0.14,1760); },
+  chirp(){ [1900,2400,2100,2600].forEach((f,i)=>setTimeout(()=>tone(f,0.07,'square',0.07),i*80)); },
+  ribbit(){ tone(130,0.1,'square',0.18); setTimeout(()=>tone(105,0.14,'square',0.18),120); },
+  munch(){ [300,240,320].forEach((f,i)=>setTimeout(()=>noiseBurst(0.08,1400,0.2),i*120)); },
+  thump(){ tone(160,0.09,'sine',0.2,90); },
+  rain(){ noiseBurst(2.6,3200,0.07); },
+  sparkle(){ [1568,2093,1760].forEach((f,i)=>setTimeout(()=>tone(f,0.12,'sine',0.1),i*70)); }
+};
+
+/* ---------- particles ---------- */
+function sparkle(x,y,n,colors){
+  n=n||10; colors=colors||['#FFD93B','#FF8FB2','#fff','#7FD4F2'];
+  for(let i=0;i<n;i++){
+    const s=document.createElement('div'); s.className='spark';
+    const sz=4+Math.random()*8;
+    s.style.cssText=`left:${x}%;top:${y}%;width:${sz}px;height:${sz}px;background:${colors[i%colors.length]};border-radius:${Math.random()>.5?'50%':'2px'};--dx:${(Math.random()*80-40)}px;--dy:${(Math.random()*80-40)}px`;
+    game.appendChild(s); setTimeout(()=>s.remove(),850);
+  }
+}
+function hearts(x,y,n){
+  n=n||3;
+  for(let i=0;i<n;i++){
+    const s=document.createElement('div'); s.className='particle';
+    s.style.left=`calc(${x}% + ${(i-1)*22}px)`; s.style.top=y+'%';
+    s.innerHTML=`<svg width="30" height="28" viewBox="0 0 30 28"><path d="M15,26 C6,18 2,13 2,8.5 C2,4 5.5,1.5 9,1.5 C11.8,1.5 14,3.2 15,5.4 C16,3.2 18.2,1.5 21,1.5 C24.5,1.5 28,4 28,8.5 C28,13 24,18 15,26 Z" fill="#F0504D"/></svg>`;
+    game.appendChild(s); setTimeout(()=>s.remove(),1050);
+  }
+}
+function ripple(x,y){
+  const r=document.createElement('div'); r.className='ripple';
+  r.style.cssText=`left:${x}%;top:${y}%;width:70px;height:30px;transform:translate(-50%,-50%)`;
+  game.appendChild(r); setTimeout(()=>r.remove(),950);
+}
+function waterDrops(x,y){
+  for(let i=0;i<8;i++){
+    const s=document.createElement('div'); s.className='spark';
+    s.style.cssText=`left:calc(${x}% + ${(Math.random()*36-18)}px);top:${y}%;width:6px;height:10px;background:#6FB7FF;border-radius:50% 50% 60% 60%;--dx:0px;--dy:${60+Math.random()*30}px`;
+    game.appendChild(s); setTimeout(()=>s.remove(),850);
+  }
+}
+function doHappy(el){ el.classList.remove('happy'); void el.offsetWidth; el.classList.add('happy'); }
+
+/* ---------- drag + tap (pointer events unify mouse/touch) ---------- */
+function near(a,b,dist){
+  const dx=(a._x-b._x), dy=(a._y-b._y)*1.6; // y compressed: viewBox units are taller
+  return Math.hypot(dx,dy) < dist;
+}
+function interact(el, opts){
+  opts=opts||{};
+  el.style.touchAction='none';
+  el.addEventListener('pointerdown', e=>{
+    e.preventDefault(); e.stopPropagation(); wakeAudio();
+    try{ el.setPointerCapture(e.pointerId); }catch(err){}
+    const sx=e.clientX, sy=e.clientY, ox=el._x, oy=el._y;
+    let moved=false;
+    if(opts.lift!==false) el.classList.add('lift');
+    const move=ev=>{
+      const [ux,uy]=toUnits(ev.clientX, ev.clientY);
+      const [osx,osy]=toUnits(sx,sy);
+      if(Math.hypot(ux-osx,uy-osy)>1.2) moved=true;
+      if(moved && opts.drag!==false){
+        let nx=ox+(ux-osx), ny=oy+(uy-osy);
+        if(opts.onMove) { const r=opts.onMove(nx,ny); if(r){nx=r[0];ny=r[1];} }
+        nx=Math.max(2,Math.min(98,nx)); ny=Math.max(4,Math.min(156,ny));
+        place(el,nx,ny);
+      }
+    };
+    const up=ev=>{
+      el.classList.remove('lift');
+      el.removeEventListener('pointermove',move);
+      el.removeEventListener('pointerup',up);
+      el.removeEventListener('pointercancel',up);
+      if(!moved){ if(opts.onTap) opts.onTap(); }
+      else { if(opts.onDrop) opts.onDrop(); }
+    };
+    el.addEventListener('pointermove',move);
+    el.addEventListener('pointerup',up);
+    el.addEventListener('pointercancel',up);
+  });
+}
+
+/* shared API for the game-logic script below */
+window.Park = { game, sprites, place, layout, measure, toPx, toUnits, interact, near, doHappy, sfx, tone, sparkle, hearts, ripple, waterDrops, wakeAudio };
+})();
+</script>
+
+<style>
+  /* ambient animations must run on the inner svg so the div keeps its centering transform */
+  .bob,.sway,.floaty{animation:none}
+  .bob>svg{animation:bob 2.4s ease-in-out infinite}
+  .sway>svg{animation:sway 5s ease-in-out infinite;transform-origin:50% 92%}
+  .floaty>svg{animation:floaty 3s ease-in-out infinite}
+</style>
+<script>
+(function(){
+"use strict";
+const { game, sprites, place, interact, near, doHappy, sfx, tone, sparkle, hearts, ripple, waterDrops, wakeAudio, toUnits, measure, layout } = window.Park;
+const nicko=sprites.nicko, tree=sprites.tree, kite=sprites.kite, bird=sprites.bird,
+      bunny=sprites.bunny, frog=sprites.frog, ball=sprites.ball, can=sprites.can,
+      bin=sprites.bin, trash=sprites.trash, bfly1=sprites.bfly1, bfly2=sprites.bfly2;
+const flowers=[sprites.flower1,sprites.flower2,sprites.flower3];
+
+/* ---------- initial placement (viewBox units) ---------- */
+function initialPositions(){
+  place(tree,80,108); place(kite,70,78); place(bird,60,112);
+  place(flowers[0],52,140); place(flowers[1],60,144); place(flowers[2],68,140);
+  place(can,42,142); place(bin,33,132); place(trash,20,148);
+  place(ball,48,118); place(bunny,63,130); place(frog,26,119);
+  place(nicko,45,132); place(bfly1,56,116); place(bfly2,64,110);
+}
+
+/* ---------- pond is a no-go zone for Nicko (safety, modeled not told) ---------- */
+const POND={x:20,y:118,rx:17,ry:9};
+function clampPond(x,y){
+  const dx=(x-POND.x)/POND.rx, dy=(y-POND.y)/POND.ry, d=dx*dx+dy*dy;
+  if(d<1){ const a=Math.atan2(dy,dx); return [POND.x+Math.cos(a)*POND.rx*1.02, POND.y+Math.sin(a)*POND.ry*1.02]; }
+  return [x,y];
+}
+
+/* ---------- Nicko: drag him, or tap the ground and he hops over ---------- */
+let hopping=false;
+function moveNickoTo(tx,ty){
+  if(hopping) return;
+  [tx,ty]=clampPond(tx,ty);
+  tx=Math.max(5,Math.min(95,tx)); ty=Math.max(98,Math.min(152,ty));
+  hopping=true;
+  const step=()=>{
+    const dx=tx-nicko._x, dy=ty-nicko._y, d=Math.hypot(dx,dy);
+    if(d<2.2){ hopping=false; return; }
+    const hopLen=Math.min(9,d), nx=nicko._x+dx/d*hopLen, ny=nicko._y+dy/d*hopLen;
+    const sx=nicko._x, sy=nicko._y, t0=performance.now(), dur=200;
+    const svg=nicko.querySelector('svg');
+    const anim=(t)=>{
+      const k=Math.min(1,(t-t0)/dur);
+      place(nicko, sx+(nx-sx)*k, sy+(ny-sy)*k - Math.sin(k*Math.PI)*4.5);
+      if(k<1) requestAnimationFrame(anim);
+      else{ sfx.thump(); svg.classList.remove('squash'); void svg.offsetWidth; svg.classList.add('squash'); setTimeout(step,70); }
+    };
+    requestAnimationFrame(anim);
+  };
+  step();
+}
+interact(nicko,{
+  onTap(){ doHappy(nicko); tone(420,0.14,'triangle',0.2,640); },
+  onMove(nx,ny){ return clampPond(nx,ny); }
+});
+game.addEventListener('pointerdown', e=>{
+  wakeAudio();
+  const r=game.getBoundingClientRect();
+  const [ux,uy]=toUnits(e.clientX-r.left, e.clientY-r.top);
+  moveNickoTo(ux,uy);
+});
+document.getElementById('hud').addEventListener('pointerdown', e=>e.stopPropagation());
+
+/* ---------- tree: tap to shake an apple loose ---------- */
+const apples=[];
+function makeApple(){
+  const d=document.createElement('div');
+  d.className='sprite'; d.style.display='none'; d.style.zIndex='14';
+  d.innerHTML='<svg viewBox="0 0 40 44"><path d="M20,8 q1,-6 6,-7" stroke="#7A5238" stroke-width="3" fill="none" stroke-linecap="round"/><ellipse cx="20" cy="25" rx="15" ry="16" fill="#F0504D"/><ellipse cx="14" cy="19" rx="5" ry="7" fill="#FF8A87" opacity=".7"/><path d="M26,6 q8,-2 10,4 q-6,4 -10,-4" fill="#5FBF6B"/></svg>';
+  game.appendChild(d); d._w=7; d._x=0; d._y=0;
+  interact(d,{
+    onTap(){ sfx.pop(); doHappy(d); },
+    onDrop(){
+      if(near(d,nicko,11)){ // feed Nicko
+        d.style.display='none'; hearts(nicko._x,nicko._y-10,3); sfx.munch();
+        setTimeout(()=>{ doHappy(nicko); sfx.happy(); },350);
+      }else if(near(d,bunny,12)){ // share with bunny
+        d.style.display='none'; hearts(bunny._x,bunny._y-10,4); doHappy(bunny); sfx.happy();
+      }else{ sfx.thump(); }
+    }
+  });
+  apples.push(d); return d;
+}
+for(let i=0;i<3;i++) makeApple();
+interact(tree,{drag:false,lift:false,onTap(){
+  doHappy(tree); sfx.boing();
+  const a=apples.find(a=>a.style.display==='none');
+  if(!a) return;
+  const x=64+Math.random()*28, y=134+Math.random()*8;
+  a.style.display='block'; a.style.transition='none'; place(a,x,98);
+  requestAnimationFrame(()=>{ a.style.transition='top .55s ease-in, left .55s ease-in';
+    place(a,x,y); setTimeout(()=>{a.style.transition='none'; sfx.thump();},580); });
+}});
+
+/* ---------- friends ---------- */
+interact(bunny,{drag:false,onTap(){ doHappy(bunny); sfx.pop(); setTimeout(()=>sfx.pop(),120); }});
+interact(bird,{drag:false,onTap(){ doHappy(bird); sfx.chirp(); }});
+interact(frog,{drag:false,onTap(){ doHappy(frog); sfx.ribbit(); }});
+
+/* kite stuck in the tree: tap to free it, bird celebrates */
+kite._freed=false;
+interact(kite,{
+  onTap(){
+    if(kite._freed){ doHappy(kite); sfx.pop(); return; }
+    kite._freed=true;
+    kite.style.transition='left 1.3s ease-in, top 1.3s ease-in';
+    place(kite,54,120);
+    setTimeout(()=>{
+      kite.style.transition='none';
+      hearts(bird._x,bird._y-10,4); doHappy(bird); sfx.chirp();
+      setTimeout(()=>sfx.happy(),400);
+      sparkle(54,72,10);
+    },1350);
+  },
+  onMove(nx,ny){ if(!kite._freed) return [kite._x,kite._y]; }
+});
+
+/* ---------- pond: tap for ripples ---------- */
+document.getElementById('bg').addEventListener('pointerdown', e=>{ e.stopPropagation(); wakeAudio(); });
+game.addEventListener('pointerdown', e=>{
+  const r=game.getBoundingClientRect();
+  const px=e.clientX-r.left, py=e.clientY-r.top;
+  const [ux,uy]=toUnits(px,py);
+  const dx=(ux-POND.x)/POND.rx, dy=(uy-POND.y)/POND.ry;
+  if(dx*dx+dy*dy<1.15){
+    const gx=(px/r.width*100), gy=(py/r.height*100);
+    ripple(gx,gy); sfx.plip(); doHappy(frog);
+  }
+}, true);
+
+/* ---------- flowers + watering can ---------- */
+flowers.forEach(f=>{ f._stage=0; applyFlower(f); });
+function applyFlower(f){ f.querySelector('svg').style.transform=`scale(${[0.55,0.75,0.95,1.15][f._stage]})`; }
+function growFlower(f){
+  if(f._stage>=3) return;
+  f._stage++; applyFlower(f); sfx.plip(); sparkle(f._x,f._y-8,7,['#FFD93B','#fff','#FF8FB2']);
+  if(flowers.every(x=>x._stage>=3)){ setTimeout(()=>{ sfx.happy(); sparkle(60,120,18); },400); }
+}
+interact(can,{
+  onTap(){ sfx.pop(); doHappy(can); },
+  onDrop(){
+    let watered=false;
+    flowers.forEach(f=>{ if(near(can,f,12)&&f._stage<3){ waterDrops(f._x,f._y-10); growFlower(f); watered=true; } });
+    if(!watered) sfx.thump();
+  }
+});
+
+/* ---------- trash into the bin ---------- */
+function hideTrash(){ trash.style.display='none'; trash._gone=true;
+  clearTimeout(trash._rt); trash._rt=setTimeout(()=>{ trash.style.display='block'; trash._gone=false;
+    place(trash,12+Math.random()*30,140+Math.random()*10); },30000); }
+interact(trash,{
+  onTap(){ sfx.pop(); doHappy(trash); },
+  onDrop(){
+    if(trash._gone) return;
+    if(near(trash,bin,13)){
+      hideTrash(); doHappy(bin); sfx.sparkle(); sparkle(bin._x,bin._y-12,14);
+      setTimeout(()=>sfx.happy(),350);
+    } else sfx.thump();
+  }
+});
+interact(bin,{drag:false,onTap(){ doHappy(bin); sfx.boing(); }});
+
+/* ---------- ball: drag and fling ---------- */
+(function(){
+  const el=ball; let raf=null;
+  function stop(){ if(raf){cancelAnimationFrame(raf);raf=null;} }
+  el.addEventListener('pointerdown',e=>{
+    e.preventDefault(); e.stopPropagation(); wakeAudio(); stop();
+    try{el.setPointerCapture(e.pointerId);}catch(err){}
+    const sx=e.clientX, sy=e.clientY, ox=el._x, oy=el._y;
+    let moved=false; const trail=[{x:ox,y:oy,t:performance.now()}];
+    el.classList.add('lift');
+    const move=ev=>{
+      const [ux,uy]=toUnits(ev.clientX,ev.clientY), [osx,osy]=toUnits(sx,sy);
+      if(Math.hypot(ux-osx,uy-osy)>1.2) moved=true;
+      if(moved){ const nx=Math.max(4,Math.min(96,ox+ux-osx)), ny=Math.max(96,Math.min(154,oy+uy-osy));
+        place(el,nx,ny); trail.push({x:nx,y:ny,t:performance.now()}); if(trail.length>8)trail.shift(); }
+    };
+    const up=()=>{
+      el.classList.remove('lift');
+      el.removeEventListener('pointermove',move); el.removeEventListener('pointerup',up); el.removeEventListener('pointercancel',up);
+      if(!moved){ sfx.boing(); doHappy(el); return; }
+      const now=performance.now(), old=trail.find(p=>now-p.t>90)||trail[0], last=trail[trail.length-1];
+      const dt=Math.max(1,(last.t-old.t)/16.7);
+      let vx=Math.max(-6,Math.min(6,(last.x-old.x)/dt)), vy=Math.max(-6,Math.min(6,(last.y-old.y)/dt));
+      const step=()=>{
+        let x=el._x+vx, y=el._y+vy, bounced=false;
+        if(x<4||x>96){vx*=-0.7;x=Math.max(4,Math.min(96,x));bounced=true;}
+        if(y<96||y>154){vy*=-0.7;y=Math.max(96,Math.min(154,y));bounced=true;}
+        if(bounced&&Math.hypot(vx,vy)>1.2) sfx.boing();
+        vx*=0.985; vy*=0.985; place(el,x,y);
+        raf=Math.hypot(vx,vy)>0.15?requestAnimationFrame(step):null;
+      };
+      raf=requestAnimationFrame(step);
+    };
+    el.addEventListener('pointermove',move); el.addEventListener('pointerup',up); el.addEventListener('pointercancel',up);
+  });
+  el._stop=stop;
+})();
+
+/* ---------- clouds: tap for rain, then a rainbow ---------- */
+let raining=false, cloudCd=false;
+function tapCloud(cloudEl,e){
+  e.stopPropagation(); wakeAudio();
+  if(raining||cloudCd){ sfx.pop(); return; }
+  raining=true; cloudCd=true;
+  cloudEl.querySelector('svg').style.filter='brightness(.72)';
+  sfx.rain();
+  const drops=[];
+  for(let i=0;i<30;i++){ const d=document.createElement('div'); d.className='raindrop';
+    d.style.left=(Math.random()*100)+'%'; d.style.animationDelay=(Math.random()*0.7)+'s';
+    game.appendChild(d); drops.push(d); }
+  setTimeout(()=>{
+    drops.forEach(d=>d.remove());
+    cloudEl.querySelector('svg').style.filter='';
+    const rb=document.getElementById('rainbow');
+    rb.style.transition='opacity 1.2s'; rb.style.opacity='1'; rb.style.animation='rainbowIn 1.2s ease-out';
+    flowers.forEach(f=>growFlower(f));
+    sfx.sparkle(); sparkle(72,34,16);
+    setTimeout(()=>{ rb.style.opacity='0'; raining=false; },7000);
+    setTimeout(()=>{ cloudCd=false; },20000);
+  },2700);
+}
+document.getElementById('cloud1').addEventListener('pointerdown',e=>tapCloud(document.getElementById('cloud1'),e));
+document.getElementById('cloud2').addEventListener('pointerdown',e=>tapCloud(document.getElementById('cloud2'),e));
+
+/* ---------- butterflies wander ---------- */
+function wander(el){
+  const roam=()=>{
+    el.style.transition='left 2.8s ease-in-out, top 2.8s ease-in-out';
+    place(el, 42+Math.random()*36, 100+Math.random()*34);
+    setTimeout(roam, 3000+Math.random()*1600);
+  };
+  setTimeout(roam, 600+Math.random()*1400);
+}
+interact(bfly1,{drag:false,onTap(){ sparkle(bfly1._x,bfly1._y,6,['#C79BF2','#fff']); sfx.chime(); }});
+interact(bfly2,{drag:false,onTap(){ sparkle(bfly2._x,bfly2._y,6,['#FFB3D9','#fff']); sfx.chime(); }});
+
+/* ---------- HUD ---------- */
+const soundBtn=document.getElementById('soundBtn');
+soundBtn.addEventListener('click',e=>{ e.stopPropagation(); wakeAudio(); muted=!muted;
+  document.getElementById('soundWaves').style.opacity=muted?0.15:1; sfx.pop(); });
+document.getElementById('resetBtn').addEventListener('click',e=>{ e.stopPropagation(); wakeAudio(); resetGame(); sfx.pop(); });
+function resetGame(){
+  if(ball._stop) ball._stop();
+  initialPositions();
+  flowers.forEach(f=>{ f._stage=0; applyFlower(f); });
+  apples.forEach(a=>{ a.style.display='none'; });
+  trash.style.display='block'; trash._gone=false; clearTimeout(trash._rt);
+  kite._freed=false;
+  const rb=document.getElementById('rainbow'); rb.style.opacity='0';
+}
+document.addEventListener('contextmenu',e=>e.preventDefault());
+
+/* ---------- go ---------- */
+measure();
+initialPositions();
+layout();
+wander(bfly1); wander(bfly2);
+})();
+</script>
+</body>
+</html>
