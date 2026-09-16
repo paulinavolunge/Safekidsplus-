@@ -378,10 +378,10 @@ function setMouth(happy){
   nicko.querySelector('.mouthSmile').style.display=happy?'none':'';
   nicko.querySelector('.mouthHappy').style.display=happy?'':'none';
 }
-function happyHop(){
+function happyHop(withHearts){
   nicko.classList.remove('happyjump');void nicko.offsetWidth;nicko.classList.add('happyjump');
   setMouth(true);setTimeout(()=>setMouth(false),900);
-  B.sHappy();B.hearts(nicko._x,nicko._y-10);
+  B.sHappy();if(withHearts!==false)B.hearts(nicko._x,nicko._y-10);
 }
 setInterval(()=>{
   if(!nicko.classList.contains('walking')){
@@ -445,8 +445,21 @@ function feedFood(f){
   const idx=bowlContents.indexOf(f);if(idx>=0)bowlContents.splice(idx,1);
   updateFoodVis();
   if(f.id==='foodLemon'){sourFace();return;}
-  B.sMunch();B.hearts(nicko._x,nicko._y-10);happyHop();
+  B.sMunch();
+  if(f.id==='foodFish'){B.hearts(nicko._x,nicko._y-10);happyHop(true);} // favorite: genuine affection
+  else if(f.id==='foodMilk'){B.hearts(nicko._x,nicko._y-10);setMouth(true);setTimeout(()=>setMouth(false),900);} // gentle
+  else{happyHop(false);B.sparkles(nicko._x,nicko._y-10,10);} // apple: playful crunch
   setTimeout(()=>respawnFood(f),3500);
+}
+/* ---------- soup: foods dropped in a hot pot ---------- */
+const soupTint={foodFish:'#F5A623',foodApple:'#E0663A',foodMilk:'#F3EAD8',foodLemon:'#F2D24B'};
+function makeSoup(f){
+  f._eaten=true;f._home=false;updateFoodVis();
+  const surf=$('soupSurf');if(surf)surf.setAttribute('fill',soupTint[f.id]||'#F5A623');
+  B.sBubble();B.tone(200,.4,'sawtooth',.05,0,110); // sizzle
+  for(let i=0;i<5;i++)setTimeout(()=>B.steam(pot._x,pot._y-9),i*130);
+  B.sparkles(pot._x,pot._y-12,10);
+  setTimeout(()=>respawnFood(f),6000);
 }
 foods.forEach(f=>{
   interact(f,{onTap(){B.sPop();},onDrop(){
@@ -456,6 +469,7 @@ foods.forEach(f=>{
       place(f,hx,hy,parseFloat(f.dataset.w));f._home=true;updateFoodVis();return;
     }
     f._home=false;
+    if(near(f,pot,12)&&burnerOn){makeSoup(f);return;} // hot pot + food = soup
     if(near(f,nicko,11)){feedFood(f);return;}
     if(near(f,bowl,11)&&bowlContents.length<4){
       bowlContents.push(f);f._inBowl=true;
@@ -477,7 +491,7 @@ interact(bowl,{drag:false,onTap(){
     B.hearts(bowl._x,bowl._y-8);
     setTimeout(()=>respawnFood(f),3000);
   },i*550));
-  setTimeout(()=>{B.sHappy();happyHop();B.sparkles(bowl._x,bowl._y-10,10);},items.length*550);
+  setTimeout(()=>{B.sHappy();happyHop(false);B.sparkles(bowl._x,bowl._y-10,10);},items.length*550);
 }});
 
 /* ---------- stove & pot ---------- */
@@ -516,7 +530,7 @@ interact(cup,{onTap(){
   if(cupFill>=75&&near(cup,nicko,12)){
     cupFill=0;cupWater.style.height='0%';
     B.tone(400,.15,'sine',.12,0,700);B.tone(500,.15,'sine',.12,.15,850);
-    B.hearts(nicko._x,nicko._y-10);happyHop();
+    happyHop(false);B.sparkles(nicko._x,nicko._y-10,8);
   }
 }});
 
@@ -527,7 +541,7 @@ interact(door,{drag:false,onTap(){B.sPop();setTimeout(()=>{window.location.href=
 /* ---------- Nicko ---------- */
 let gagCool=0;
 function gagOK(){const n=Date.now();if(n-gagCool<4000)return false;gagCool=n;return true;}
-interact(nicko,{onTap(){B.sMeow();happyHop();},onDrop(){
+interact(nicko,{onTap(){B.sMeow();happyHop(false);},onDrop(){
   if(fridgeOpen&&near(nicko,{_x:20,_y:110},14)){
     if(!gagOK())return;
     place(nicko,20,112,14,true);nicko.classList.add('shiver');B.sBrr();
@@ -540,7 +554,25 @@ interact(nicko,{onTap(){B.sMeow();happyHop();},onDrop(){
     B.sSplash();B.droplets(nicko._x,nicko._y,14);nicko.classList.add('shake');
     setTimeout(()=>nicko.classList.remove('shake'),600);B.sMeow();
   }
+  if(burnerOn&&near(nicko,stove,15)){ // hot stove: Nicko steps back on his own
+    if(!gagOK())return;
+    place(nicko,68,134,19,true);
+    setFace('half');B.tone(330,.25,'sine',.1,0,220);
+    nicko.classList.add('shake');
+    setTimeout(()=>{nicko.classList.remove('shake');setFace('open');},900);
+  }
 }});
+
+/* ---------- hunger: a gentle invitation, never a demand ---------- */
+let lastActK=0;
+game.addEventListener('pointerdown',()=>{lastActK=Date.now();},true);
+setInterval(()=>{
+  if(nicko.classList.contains('walking')||Date.now()-lastActK<30000)return;
+  if(Math.random()<.5){
+    B.tone(170,.55,'sine',.06,0,110); // tummy rumble
+    nicko.classList.remove('happyjump');void nicko.offsetWidth;nicko.classList.add('happyjump');
+  }
+},45000);
 $('bg').addEventListener('pointerdown',e=>{
   B.wakeAudio();
   const r=game.getBoundingClientRect();
@@ -575,7 +607,7 @@ function init(){
   place(nicko,42,134,19);
   B.layout();updateFoodVis();
   if(window.NK){NK.room='kitchen';if(!NK.sound){B.muted=true;$('sndOn').style.display='none';$('sndOff').style.display='';}}
-  setTimeout(()=>{B.sMeow();happyHop();},1200);
+  setTimeout(()=>{B.sMeow();happyHop(false);},1200);
 }
 window.addEventListener('resize',()=>{B.measure();B.layout();});
 window.addEventListener('orientationchange',()=>setTimeout(()=>{B.measure();B.layout();},300));

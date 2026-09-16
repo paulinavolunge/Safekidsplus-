@@ -357,11 +357,11 @@ function setMouth(happy){
   nicko.querySelector('.mouthSmile').style.display=happy?'none':'';
   nicko.querySelector('.mouthHappy').style.display=happy?'':'none';
 }
-function happyHop(){
+function happyHop(withHearts){
   if(nicko._onSwing)return;
   nicko.classList.remove('happyjump');void nicko.offsetWidth;nicko.classList.add('happyjump');
   setMouth(true);setTimeout(()=>setMouth(false),900);
-  B.sHappy();B.hearts(nicko._x,nicko._y-10);
+  B.sHappy();if(withHearts!==false)B.hearts(nicko._x,nicko._y-10);
 }
 setInterval(()=>{
   if(!nicko.classList.contains('walking')){
@@ -466,7 +466,7 @@ apples.forEach(a=>{
     if(a._onTree)fallApple(a);else B.sPop();
   },onDrop(){
     if(!a._onTree&&near(a,nicko,10)){
-      a.style.display='none';B.sMunch();B.hearts(nicko._x,nicko._y-10);happyHop();
+      a.style.display='none';B.sMunch();B.hearts(nicko._x,nicko._y-10);happyHop(false);
       setTimeout(()=>{
         const[hx,hy]=appleHome[a.id];a._onTree=true;a.style.display='';
         place(a,hx,hy,6);B.sPop();
@@ -495,7 +495,7 @@ interact(swingset,{drag:false,onTap(){swingGo();B.sGiggle();}});
 function rideSwing(){
   nicko._onSwing=true;
   place(nicko,78,80,14,true);swingGo();B.sGiggle();
-  B.hearts(nicko._x,nicko._y-12);
+  B.sparkles(nicko._x,nicko._y-12,10);
 }
 
 /* ---------- doghouse (mystery dog!) ---------- */
@@ -503,7 +503,7 @@ let dogOut=false;
 interact(doghouse,{drag:false,onTap(){
   dogOut=!dogOut;
   $('dog').classList.toggle('out',dogOut);
-  if(dogOut){B.sBark();setTimeout(()=>happyHop(),400);}
+  if(dogOut){B.sBark();setTimeout(()=>happyHop(false),400);}
   else B.sClick();
 }});
 
@@ -525,10 +525,35 @@ interact(door,{drag:false,onTap(){B.sPop();setTimeout(()=>{window.location.href=
 /* ---------- Nicko ---------- */
 interact(nicko,{onTap(){
   if(nicko._onSwing){nicko._onSwing=false;place(nicko,58,120,19,true);B.sMeow();return;}
-  B.sMeow();happyHop();
+  B.sMeow();happyHop(false);
 },onDrop(){
   if(near(nicko,swingset,13)&&!nicko._onSwing){rideSwing();return;}
+  if(near(nicko,doghouse,16)){ // greeting the mystery dog: a social hello
+    if(!dogOut){dogOut=true;$('dog').classList.toggle('out',true);}
+    B.sBark();setMouth(true);
+    setTimeout(()=>{setMouth(false);B.sMeow();B.hearts(doghouse._x,doghouse._y-12);happyHop(false);},450);
+    return;
+  }
+  if(near(nicko,butterfly,15)){ // Nicko watches the butterfly
+    B.sChirp();B.sparkles(butterfly._x,butterfly._y-6,8);
+    setMouth(true);setTimeout(()=>setMouth(false),1200);
+    return;
+  }
 }});
+
+/* ---------- butterfly cue: Nicko notices it on his own ---------- */
+let lastActB=0;
+game.addEventListener('pointerdown',()=>{lastActB=Date.now();},true);
+setInterval(()=>{
+  if(nicko._onSwing||nicko.classList.contains('walking')||Date.now()-lastActB<20000)return;
+  if(Math.random()<.5&&!near(nicko,butterfly,20)){
+    nicko.classList.add('walking');
+    const dx=butterfly._x-nicko._x,dy=butterfly._y-nicko._y,d=Math.hypot(dx,dy)||1;
+    place(nicko,nicko._x+dx/d*10,nicko._y+dy/d*10,19,true);
+    B.sChirp();
+    setTimeout(()=>nicko.classList.remove('walking'),600);
+  }
+},30000);
 $('bg').addEventListener('pointerdown',e=>{
   if(nicko._onSwing)return;
   B.wakeAudio();
@@ -569,7 +594,7 @@ function init(){
   place(door,50,98,12);place(nicko,46,140,19);
   B.layout();
   if(window.NK){NK.room='backyard';if(!NK.sound){B.muted=true;$('sndOn').style.display='none';$('sndOff').style.display='';}}
-  setTimeout(()=>{B.sMeow();happyHop();},1200);
+  setTimeout(()=>{B.sMeow();happyHop(false);},1200);
 }
 window.addEventListener('resize',()=>{B.measure();B.layout();});
 window.addEventListener('orientationchange',()=>setTimeout(()=>{B.measure();B.layout();},300));

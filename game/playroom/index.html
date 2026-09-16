@@ -304,11 +304,11 @@ function setMouth(happy){
   nicko.querySelector('.mouthSmile').style.display=happy?'none':'';
   nicko.querySelector('.mouthHappy').style.display=happy?'':'none';
 }
-function happyHop(){
+function happyHop(withHearts){
   if(nicko._inPit)return;
   nicko.classList.remove('happyjump');void nicko.offsetWidth;nicko.classList.add('happyjump');
   setMouth(true);setTimeout(()=>setMouth(false),900);
-  B.sHappy();B.hearts(nicko._x,nicko._y-10);
+  B.sHappy();if(withHearts!==false)B.hearts(nicko._x,nicko._y-10);
 }
 setInterval(()=>{
   if(!nicko.classList.contains('walking')){
@@ -349,10 +349,41 @@ function interact(el,{drag=true,lift=true,onTap,onDrop,onMove}={}){
 const PAINT={x0:14.5,y0:53,x1:29.5,y1:67.5};
 let brushColor='#F0504D',dots=[],lastDot=null,lastErase=0;
 const SVGNS='http://www.w3.org/2000/svg';
+function mixColors(c1,c2){
+  const base={'#F0504D':'R','#3FB6B2':'B','#FFC93C':'Y','#8E7CF0':'P'};
+  const n1=base[c1],n2=base[c2];
+  if(!n1||!n2)return '#A67C52'; // mixed colors keep mixing into muddy brown
+  if(n1===n2)return c1;
+  const pair=[n1,n2].sort().join('');
+  if(pair==='RY')return '#F2994A'; // red + yellow = orange
+  if(pair==='BY')return '#6FCF97'; // yellow + blue = green
+  if(pair==='BR')return '#8E7CF0'; // blue + red = purple
+  return '#A67C52'; // purple + anything = muddy brown
+}
+let saveT=null;
+function saveDots(){
+  if(!window.NK)return;
+  clearTimeout(saveT);
+  saveT=setTimeout(()=>{NK.session.set('paintDots',dots.map(d=>({x:d.x,y:d.y,c:d.c})));},600);
+}
 function stamp(x,y){
+  let col=brushColor;
+  for(const d of dots){ // painting over another color mixes them
+    if(d.c!==col&&Math.hypot(d.x-x,d.y-y)<2.4){col=mixColors(d.c,col);break;}
+  }
   const c=document.createElementNS(SVGNS,'circle');
-  c.setAttribute('cx',x);c.setAttribute('cy',y);c.setAttribute('r',1.7);c.setAttribute('fill',brushColor);
-  paintLayer.appendChild(c);dots.push({el:c,x,y});
+  c.setAttribute('cx',x);c.setAttribute('cy',y);c.setAttribute('r',1.7);c.setAttribute('fill',col);
+  paintLayer.appendChild(c);dots.push({el:c,x,y,c:col});
+  saveDots();
+}
+function pawPrint(x,y){ // paint-paw comedy: Nicko stamps the canvas himself
+  const spots=[[0,2,2.1],[-2.6,-1,1],[-1,-2.2,1],[1,-2.2,1],[2.6,-1,1]];
+  spots.forEach(s=>{
+    const c=document.createElementNS(SVGNS,'circle');
+    c.setAttribute('cx',x+s[0]);c.setAttribute('cy',y+s[1]);c.setAttribute('r',s[2]);c.setAttribute('fill',brushColor);
+    paintLayer.appendChild(c);dots.push({el:c,x:x+s[0],y:y+s[1],c:brushColor});
+  });
+  saveDots();
 }
 blobs.forEach((b,i)=>{
   const colors=['#F0504D','#3FB6B2','#FFC93C','#8E7CF0'];
@@ -376,24 +407,35 @@ interact(sponge,{onTap(){B.sPop();},onMove(x,y){
     if(Math.hypot(d.x-x,d.y-y)<6){d.el.remove();erased=true;return false;}
     return true;
   });
-  if(erased&&now-lastErase>300){lastErase=now;B.sDip();}
+  if(erased){if(now-lastErase>300){lastErase=now;B.sDip();}saveDots();}
 }});
 interact(easel,{drag:false,onTap(){
   if(dots.length===0){B.sGiggle();B.sparkles(easel._x,easel._y-16,8);}
   else{B.sPop();B.sparkles(easel._x,easel._y-16,6);}
 }});
 
-/* ---------- xylophone + drum ---------- */
+/* ---------- xylophone + drum: slow is dreamy, fast is too loud ---------- */
+let xyTaps=[],drumTaps=[];
 document.querySelectorAll('.xybar').forEach(bar=>{
   interact(bar,{drag:false,onTap(){
     B.tone(parseFloat(bar.dataset.note),.35,'triangle',.2);
     bar.classList.remove('barbounce');void bar.offsetWidth;bar.classList.add('barbounce');
     B.sparkles(bar._x,bar._y-8,4);
+    const now=Date.now();xyTaps=xyTaps.filter(t=>now-t<2000);xyTaps.push(now);
+    if(xyTaps.length>=5){ // too loud: Nicko squints
+      xyTaps=[];setFace('closed');B.tone(500,.14,'sine',.1,0,700);
+      setTimeout(()=>setFace('open'),900);
+    }else if(xyTaps.length>=3&&now-xyTaps[0]>1500){ // slow and dreamy: sway along
+      xyTaps=[];setMouth(true);B.tone(392,.3,'sine',.1);B.tone(523,.3,'sine',.1,.2);
+      setTimeout(()=>setMouth(false),900);
+    }
   }});
 });
 interact(drum,{drag:false,onTap(){
   drum.classList.remove('drumbounce');void drum.offsetWidth;drum.classList.add('drumbounce');
   B.sBoom();
+  const now=Date.now();drumTaps=drumTaps.filter(t=>now-t<1200);drumTaps.push(now);
+  if(drumTaps.length>=3){drumTaps=[];happyHop(false);} // drumroll dance
 }});
 
 /* ---------- hats ---------- */
@@ -406,7 +448,11 @@ hats.forEach(h=>{
   },onDrop(){
     if(near(h,nicko,12)){
       if(hatWorn&&hatWorn!==h){const[hx,hy]=hatHome[hatWorn.id];place(hatWorn,hx,hy,parseFloat(hatWorn.dataset.w),true);}
-      hatWorn=h;B.sHappy();B.sparkles(nicko._x,nicko._y-14,10);happyHop();
+      hatWorn=h;
+      if(h.id==='hatParty'){B.sGiggle();B.sparkles(nicko._x,nicko._y-14,10);}
+      else if(h.id==='hatCrown'){B.tone(523,.15,'triangle',.15);B.tone(659,.15,'triangle',.15,.12);B.tone(784,.25,'triangle',.15,.24);B.sparkles(nicko._x,nicko._y-14,8);}
+      else{B.sPop();B.sparkles(nicko._x,nicko._y-14,6);}
+      happyHop(false);
     }else if(h===hatWorn){
       hatWorn=null;B.sPop();
     }
@@ -428,7 +474,7 @@ interact(pit,{drag:false,onTap(){bounceBalls();B.sPop();}});
 function dive(){
   nicko._inPit=true;
   place(nicko,52,141,16,true);bounceBalls();B.sGiggle();
-  B.hearts(nicko._x,nicko._y-12);
+  B.sparkles(nicko._x,nicko._y-12,10);
 }
 function climbOut(){
   nicko._inPit=false;place(nicko,30,138,19,true);B.sMeow();
@@ -440,9 +486,13 @@ interact(door,{drag:false,onTap(){B.sPop();setTimeout(()=>{window.location.href=
 /* ---------- Nicko ---------- */
 interact(nicko,{onTap(){
   if(nicko._inPit){climbOut();return;}
-  B.sMeow();happyHop();
+  B.sMeow();happyHop(false);
 },onDrop(){
   if(near(nicko,pit,18)&&!nicko._inPit){dive();return;}
+  const px=nicko._x,py=nicko._y-2;
+  if(px>PAINT.x0-4&&px<PAINT.x1+4&&py>PAINT.y0-8&&py<PAINT.y1+4){ // paint-paw!
+    pawPrint(px,py);B.sGiggle();B.sparkles(px,py-8,10);
+  }
 }});
 $('bg').addEventListener('pointerdown',e=>{
   if(nicko._inPit)return;
@@ -482,8 +532,16 @@ function init(){
   pitballs.forEach((b,i)=>place(b,ballPos[i][0],ballPos[i][1],7));
   place(door,90,40,11);place(nicko,46,118,19);
   B.layout();
+  if(window.NK){
+    const saved=NK.session.get('paintDots');
+    if(saved)saved.forEach(d=>{
+      const c=document.createElementNS(SVGNS,'circle');
+      c.setAttribute('cx',d.x);c.setAttribute('cy',d.y);c.setAttribute('r',1.7);c.setAttribute('fill',d.c);
+      paintLayer.appendChild(c);dots.push({el:c,x:d.x,y:d.y,c:d.c});
+    });
+  }
   if(window.NK){NK.room='playroom';if(!NK.sound){B.muted=true;$('sndOn').style.display='none';$('sndOff').style.display='';}}
-  setTimeout(()=>{B.sMeow();happyHop();},1200);
+  setTimeout(()=>{B.sMeow();happyHop(false);},1200);
 }
 window.addEventListener('resize',()=>{B.measure();B.layout();});
 window.addEventListener('orientationchange',()=>setTimeout(()=>{B.measure();B.layout();},300));

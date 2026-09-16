@@ -44,6 +44,8 @@
   @keyframes hjump{0%{transform:translateY(0) scale(1)}35%{transform:translateY(-16%) scale(1.04,.94)}70%{transform:translateY(0) scale(.96,1.05)}100%{transform:translateY(0) scale(1)}}
   #nicko.shake{animation:shk .5s ease}
   @keyframes shk{0%,100%{transform:rotate(0)}25%{transform:rotate(-8deg)}50%{transform:rotate(7deg)}75%{transform:rotate(-5deg)}}
+  #nicko.shiver{animation:shv .16s linear infinite}
+  @keyframes shv{0%{transform:translateX(-2.5%)}100%{transform:translateX(2.5%)}}
 </style>
 </head>
 <body>
@@ -192,6 +194,10 @@
         <line x1="34" y1="52" x2="14" y2="48"/><line x1="34" y1="57" x2="15" y2="58"/><line x1="86" y1="52" x2="106" y2="48"/><line x1="86" y1="57" x2="105" y2="58"/>
       </g>
       <circle cx="40" cy="52" r="4" fill="#F5B8C1" opacity=".55"/><circle cx="80" cy="52" r="4" fill="#F5B8C1" opacity=".55"/>
+      <g id="mudSpots" style="display:none" fill="#8A5A3B" opacity=".85">
+        <ellipse cx="48" cy="70" rx="7" ry="5"/><ellipse cx="74" cy="88" rx="8" ry="6"/>
+        <ellipse cx="62" cy="96" rx="6" ry="4.5"/><ellipse cx="40" cy="52" rx="5" ry="4"/>
+      </g>
     </g>
   </svg></div>
 
@@ -310,11 +316,11 @@ function setMouth(happy){
   nicko.querySelector('.mouthSmile').style.display=happy?'none':'';
   nicko.querySelector('.mouthHappy').style.display=happy?'':'none';
 }
-function happyHop(){
+function happyHop(withHearts){
   if(nicko._inTub)return;
   nicko.classList.remove('happyjump');void nicko.offsetWidth;nicko.classList.add('happyjump');
   setMouth(true);setTimeout(()=>setMouth(false),900);
-  B.sHappy();B.hearts(nicko._x,nicko._y-10);
+  B.sHappy();if(withHearts!==false)B.hearts(nicko._x,nicko._y-10);
 }
 setInterval(()=>{
   if(!nicko.classList.contains('walking')){
@@ -360,7 +366,8 @@ function renderTub(){
   tubWaterTop.setAttribute('cy',y);
   tubStream.setAttribute('height',(filling||draining)?16:0);
 }
-function stopWater(){filling=false;draining=false;clearInterval(fillT);renderTub();}
+function stopWater(){filling=false;draining=false;clearInterval(fillT);renderTub();
+  if(window.NK)NK.session.set('bathTub',tubLevel);}
 interact(tub,{drag:false,onTap(){
   if(filling||draining){stopWater();B.sClick();return;}
   if(tubLevel<0.99){
@@ -378,22 +385,42 @@ interact(tub,{drag:false,onTap(){
   }
 }});
 
-/* ---------- bath time ---------- */
-let bathT=null;
+/* ---------- bath time: the forgiving care loop ---------- */
+let bathT=null,washT=null;
+nicko._dirty=0;nicko._soapy=false;nicko._rinseT=null;
+function happyHopFree(withHearts){
+  setMouth(true);setTimeout(()=>setMouth(false),900);
+  B.sHappy();if(withHearts!==false)B.hearts(nicko._x,nicko._y-10);
+}
+function renderMud(){
+  const m=$('mudSpots');if(!m)return;
+  m.style.display=nicko._dirty>0?'':'none';
+  m.setAttribute('opacity',nicko._dirty>=2?'.95':'.7');
+  if(window.NK)NK.session.set('bathDirty',nicko._dirty);
+}
 function bathTime(){
   nicko._inTub=true;nicko._wet=true;
   place(nicko,26,116,15,true);
   B.sSplash();
   for(let i=0;i<6;i++)setTimeout(()=>B.particle('\uD83D\uDCA7',tub._x+(Math.random()*24-12),tub._y-6,'#7FD4E8',24),i*120);
-  happyHopFree();
+  happyHopFree(nicko._dirty===0);
   bathT=setInterval(()=>B.bubble(tub._x+(Math.random()*26-13),tub._y-4),420);
-}
-function happyHopFree(){
-  setMouth(true);setTimeout(()=>setMouth(false),900);
-  B.sHappy();B.hearts(nicko._x,nicko._y-10);
+  washT=setInterval(()=>{
+    if(tubLevel>0.3&&nicko._dirty>0){ // water washes mud away, little by little
+      nicko._dirty--;renderMud();B.sSplash();
+      for(let i=0;i<3;i++)setTimeout(()=>B.particle('\uD83D\uDCA7',nicko._x+(Math.random()*14-7),nicko._y-6,'#7FD4E8',22),i*110);
+      if(nicko._dirty===0){B.sHappy();B.sparkles(nicko._x,nicko._y-10,12);}
+    }
+    if(nicko._soapy&&tubLevel>0.3&&!nicko._rinseT){ // soapy + water = rinsing
+      nicko._rinseT=setTimeout(()=>{
+        nicko._rinseT=null;nicko._soapy=false;B.sparkles(nicko._x,nicko._y-10,10);B.sPop();
+      },2500);
+    }
+  },1600);
 }
 function climbOut(){
-  nicko._inTub=false;clearInterval(bathT);
+  nicko._inTub=false;clearInterval(bathT);clearInterval(washT);
+  if(nicko._rinseT){clearTimeout(nicko._rinseT);nicko._rinseT=null;}
   place(nicko,54,140,19,true);
   if(nicko._wet){
     nicko.classList.remove('shake');void nicko.offsetWidth;nicko.classList.add('shake');
@@ -401,12 +428,20 @@ function climbOut(){
     for(let i=0;i<4;i++)setTimeout(()=>B.particle('\uD83D\uDCA7',nicko._x+(Math.random()*14-7),nicko._y-6,'#7FD4E8',22),i*110);
   }
 }
+setInterval(()=>{ // wet and undried: a gentle shiver until the towel comes
+  nicko.classList.toggle('shiver',!!(nicko._wet&&!nicko._inTub));
+},2000);
 
 /* ---------- towel dries wet Nicko ---------- */
 interact(towel,{onTap(){B.sPop();},onDrop(){
   if(near(towel,nicko,12)&&nicko._wet){
-    nicko._wet=false;B.sHappy();B.sparkles(nicko._x,nicko._y-8,12);B.hearts(nicko._x,nicko._y-12);
-    happyHopFree();
+    if(nicko._dirty>0){ // towel refuses a muddy Nicko: wash first!
+      B.sGiggle();nicko.classList.remove('shake');void nicko.offsetWidth;nicko.classList.add('shake');
+      B.sparkles(nicko._x,nicko._y-8,6);
+    }else{
+      nicko._wet=false;B.sHappy();B.sparkles(nicko._x,nicko._y-8,12);B.hearts(nicko._x,nicko._y-12);
+      happyHopFree(false);
+    }
   }else if(!near(towel,nicko,12)){
     B.sPop();
   }
@@ -428,11 +463,16 @@ interact(duck,{onTap(){
   }else{duck._float=false;duck.classList.remove('bob');}
 }});
 
-/* ---------- soap bubbles ---------- */
+/* ---------- soap: only works on wet fur ---------- */
 interact(soap,{onTap(){B.sPop();},onDrop(){
   if(near(soap,nicko,12)){
     for(let i=0;i<8;i++)setTimeout(()=>B.bubble(nicko._x+(Math.random()*16-8),nicko._y-6),i*90);
-    B.sHappy();happyHopFree();
+    if(nicko._wet){ // soap on wet fur: now he's soapy, rinse in water
+      nicko._soapy=true;B.sHappy();happyHopFree(false);B.sparkles(nicko._x,nicko._y-10,8);
+    }else{ // soap on dry fur: popping bubbles comedy, no shortcut
+      nicko.classList.remove('shake');void nicko.offsetWidth;nicko.classList.add('shake');
+      B.sPop();setTimeout(()=>B.sPop(),220);
+    }
   }
   place(soap,soapHome[0],soapHome[1],7,true);
 }});
@@ -446,6 +486,7 @@ interact($('flushH'),{drag:false,lift:false,onTap(e){
   const sw=$('flushSwirl');
   sw.classList.remove('spin');void sw.getBoundingClientRect();sw.classList.add('spin');
   B.sWhoosh();B.sparkles(toilet._x,toilet._y-8,8);
+  if(near(nicko,toilet,16)&&nicko._dirty<2){nicko._dirty++;renderMud();B.sPop();} // splash zone!
 }});
 
 /* ---------- sink + mirror ---------- */
@@ -453,11 +494,14 @@ let sinkOn=false,sinkT=null;
 interact(psink,{drag:false,onTap(){
   sinkOn=!sinkOn;
   $('sinkStream').setAttribute('height',sinkOn?14:0);
-  if(sinkOn){sinkT=setInterval(()=>B.sDrip(),500);}else{clearInterval(sinkT);}
+  if(sinkOn){
+    sinkT=setInterval(()=>B.sDrip(),500);
+    if(near(nicko,psink,14)&&nicko._dirty<2){nicko._dirty++;renderMud();B.sSplash();} // splashed!
+  }else{clearInterval(sinkT);}
   B.sClick();
 }});
 interact(mirror,{drag:false,onTap(){
-  B.sparkles(mirror._x,mirror._y,10);B.sMeow();happyHopFree();
+  B.sparkles(mirror._x,mirror._y,10);B.sMeow();happyHopFree(false);
 }});
 
 /* ---------- door to living room ---------- */
@@ -466,10 +510,23 @@ interact(door,{drag:false,onTap(){B.sPop();setTimeout(()=>{window.location.href=
 /* ---------- Nicko ---------- */
 interact(nicko,{onTap(){
   if(nicko._inTub){climbOut();return;}
-  B.sMeow();happyHop();
+  B.sMeow();happyHop(false);
 },onDrop(){
   if(near(nicko,tub,16)&&!nicko._inTub){bathTime();return;}
 }});
+
+/* ---------- duck cue: Nicko sniffs the duck on his own ---------- */
+let lastActBa=0;
+game.addEventListener('pointerdown',()=>{lastActBa=Date.now();},true);
+setInterval(()=>{
+  if(nicko._inTub||nicko.classList.contains('walking')||Date.now()-lastActBa<20000)return;
+  if(Math.random()<.5&&!near(nicko,duck,18)){
+    nicko.classList.add('walking');
+    const dx=duck._x-nicko._x,dy=duck._y-nicko._y,d=Math.hypot(dx,dy)||1;
+    place(nicko,nicko._x+dx/d*8,nicko._y+dy/d*8,19,true);
+    setTimeout(()=>{nicko.classList.remove('walking');B.sSqueak();},600);
+  }
+},30000);
 $('bg').addEventListener('pointerdown',e=>{
   if(nicko._inTub)return;
   B.wakeAudio();
@@ -499,9 +556,13 @@ function init(){
   place(towel,towelHome[0],towelHome[1],10);
   place(duck,50,134,9);place(soap,soapHome[0],soapHome[1],7);
   place(door,12,44,12);place(nicko,58,138,19);
-  renderTub();B.layout();
+  if(window.NK){
+    const _t=NK.session.get('bathTub');if(_t)tubLevel=_t;
+    const _d=NK.session.get('bathDirty');if(_d)nicko._dirty=_d;
+  }
+  renderTub();renderMud();B.layout();
   if(window.NK){NK.room='bathroom';if(!NK.sound){B.muted=true;$('sndOn').style.display='none';$('sndOff').style.display='';}}
-  setTimeout(()=>{B.sMeow();happyHop();},1200);
+  setTimeout(()=>{B.sMeow();happyHop(false);},1200);
 }
 window.addEventListener('resize',()=>{B.measure();B.layout();});
 window.addEventListener('orientationchange',()=>setTimeout(()=>{B.measure();B.layout();},300));

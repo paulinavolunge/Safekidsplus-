@@ -355,23 +355,25 @@ function setMouth(happy){
   nicko.querySelector('.mouthSmile').style.display=happy?'none':'';
   nicko.querySelector('.mouthHappy').style.display=happy?'':'none';
 }
-function happyHop(){
+function happyHop(withHearts){
   if(nicko._state==='sleep')return;
   nicko.classList.remove('happyjump');void nicko.offsetWidth;nicko.classList.add('happyjump');
   setMouth(true);setTimeout(()=>setMouth(false),900);
-  B.sHappy();B.hearts(nicko._x,nicko._y-10);
+  B.sHappy();if(withHearts!==false)B.hearts(nicko._x,nicko._y-10);
 }
 function nickoSleep(){
   if(nicko._state==='sleep')return;
+  const tuckBear=near(bear,nicko,18);
   nicko._state='sleep';nicko.classList.add('sleeping');setFace('closed');setMouth(false);
   place(nicko,66,116,19,true);
+  if(tuckBear)place(bear,56,110,12,true); // teddy tucks in too
   B.sPop();B.sparkles(66,116,8);
   let n=0;nicko._zzzT=setInterval(()=>{B.zzz(nicko._x,nicko._y);if(++n%3===0)B.tone(180,.5,'sine',.05,0,120);},1900);
 }
 function nickoWake(){
   if(nicko._state!=='sleep')return;
   clearInterval(nicko._zzzT);nicko._state='idle';nicko.classList.remove('sleeping');setFace('open');
-  place(nicko,50,126,19,true);B.sMeow();happyHop();
+  place(nicko,50,126,19,true);B.sMeow();happyHop(false);
 }
 setInterval(()=>{ // blinking
   if(nicko._state==='idle'&&!nicko.classList.contains('walking')){
@@ -436,7 +438,7 @@ interact(bed,{drag:false,onTap(){
 interact(nicko,{onTap(){
   if(nicko._state==='sleep'){nickoWake();return;}
   if(nicko._state==='drowsy'){nicko._state='idle';setFace('open');}
-  B.sMeow();happyHop();
+  B.sMeow();happyHop(false);
 },onDrop(){
   if(near(nicko,bed,24))nickoSleep();
 }});
@@ -459,7 +461,7 @@ $('bg').addEventListener('pointerdown',e=>{
 interact(bear,{onTap(){B.sPop();B.hearts(bear._x,bear._y-6);},onDrop(){
   if(nicko._state!=='sleep'&&near(bear,nicko,13)){
     const now=Date.now();if(bear._cool&&now-bear._cool<3000)return;bear._cool=now;
-    B.sMeow();happyHop();B.sparkles(nicko._x,nicko._y-8,8);
+    B.sMeow();happyHop(false);B.hearts(nicko._x,nicko._y-10);B.sparkles(nicko._x,nicko._y-8,8);
   }
 }});
 
@@ -468,7 +470,8 @@ const blocks=[$('block1'),$('block2'),$('block3'),$('block4')];
 blocks.forEach(b=>{
   interact(b,{onTap(){B.sPop();},onDrop(){
     B.sThud();
-    blocks.forEach(o=>{if(o._on===b){o._on=null;place(o,o._x,143,9,true);}}); // topple rider
+    const wasStacked=!!b._on;let hadRider=false;
+    blocks.forEach(o=>{if(o._on===b){hadRider=true;o._on=null;place(o,o._x,143,9,true);}}); // topple rider
     b._on=null;
     for(const o of blocks){
       if(o!==b&&Math.abs(b._x-o._x)<7&&b._y<o._y&&(o._y-b._y)<13){
@@ -476,9 +479,21 @@ blocks.forEach(b=>{
       }
     }
     let h=1,o=b._on;while(o){h++;o=o._on;}
-    if(h>=3){B.sparkles(b._x,b._y-10,14);if(nicko._state!=='sleep'){B.sHappy();happyHop();}}
+    if(h>=3){B.sparkles(b._x,b._y-10,14);if(nicko._state!=='sleep'){B.sHappy();happyHop(false);}}
+    else if(h===2){B.sparkles(b._x,b._y-8,7);}
+    if((wasStacked||hadRider)&&!b._on)collapseComedy(b);
   }});
 });
+
+/* ---------- block collapse: comedy, never failure ---------- */
+function collapseComedy(b){
+  nicko._sleepy=0; // loud crash wakes the drowsy mood
+  if(nicko._state==='sleep')return;
+  if(near(b,nicko,20)){
+    setFace('half');B.sThud();B.tone(500,.14,'sine',.1,0,700); // startled mrrp
+    setTimeout(()=>{if(nicko._state!=='sleep')setFace('open');},900);
+  }
+}
 
 /* ---------- music box ---------- */
 let playing=false,playT=null,drowsyT=null;
@@ -498,6 +513,36 @@ interact(musicbox,{drag:false,onTap(){
 }});
 function stopMusic(){playing=false;clearInterval(playT);clearTimeout(drowsyT);
   if(nicko._state==='drowsy'){nicko._state='idle';setFace('open');}}
+
+/* ---------- sleepiness & bedtime discovery ---------- */
+nicko._sleepy=0;
+let lastAct=0;
+game.addEventListener('pointerdown',()=>{lastAct=Date.now();},true);
+function calmFactors(){
+  let s=0;
+  if(!lampOn)s++;                 // lights low
+  if(!curtainsOpen)s++;           // curtains drawn
+  if(near(bear,nicko,14))s++;     // teddy close
+  if(playing)s++;                 // music box playing
+  if(near(nicko,bed,24))s++;      // near the bed
+  return Math.min(3,s);
+}
+setInterval(()=>{ // the room itself makes Nicko drowsy; he discovers bedtime
+  if(nicko._state==='sleep')return;
+  nicko._sleepy=calmFactors();
+  if(nicko._sleepy>=3&&nicko._state==='idle'&&!near(nicko,bed,24)){
+    nicko.classList.add('walking');
+    place(nicko,66,116,19,true);
+    setTimeout(()=>{nicko.classList.remove('walking');nickoSleep();},700);
+  }
+},4000);
+setInterval(()=>{ // occasional yawn: a gentle invitation, never a demand
+  if(nicko._state!=='idle'||Date.now()-lastAct<20000)return;
+  if(nicko._sleepy>=1&&Math.random()<.6){
+    setFace('half');B.tone(300,.4,'sine',.07,0,180);
+    setTimeout(()=>{if(nicko._state==='idle')setFace('open');},1600);
+  }
+},22000);
 
 /* ---------- HUD ---------- */
 $('soundBtn').addEventListener('pointerdown',e=>{
@@ -521,7 +566,7 @@ function init(){
   B.layout();
   if(window.NK){NK.room='bedroom';if(!NK.sound){B.muted=true;$('sndOn').style.display='none';$('sndOff').style.display='';}}
   glow.style.opacity='1';
-  setTimeout(()=>{if(nicko._state==='idle'){B.sMeow();happyHop();}},1200); // hello!
+  setTimeout(()=>{if(nicko._state==='idle'){B.sMeow();happyHop(false);}},1200); // hello!
 }
 window.addEventListener('resize',()=>{B.measure();B.layout();});
 window.addEventListener('orientationchange',()=>setTimeout(()=>{B.measure();B.layout();},300));

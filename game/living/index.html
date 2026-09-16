@@ -386,11 +386,11 @@ function setMouth(happy){
   nicko.querySelector('.mouthSmile').style.display=happy?'none':'';
   nicko.querySelector('.mouthHappy').style.display=happy?'':'none';
 }
-function happyHop(){
+function happyHop(withHearts){
   if(nicko._lounge)return;
   nicko.classList.remove('happyjump');void nicko.offsetWidth;nicko.classList.add('happyjump');
   setMouth(true);setTimeout(()=>setMouth(false),900);
-  B.sHappy();B.hearts(nicko._x,nicko._y-10);
+  B.sHappy();if(withHearts!==false)B.hearts(nicko._x,nicko._y-10);
 }
 setInterval(()=>{
   if(!nicko.classList.contains('walking')){
@@ -480,7 +480,10 @@ interact(plant,{drag:false,onTap(){
 function tidyCheck(){
   if([ball,car,feather].every(t=>t._tidy)){
     B.sHappy();B.sparkles(toybox._x,toybox._y-10,16);
-    if(!nicko._lounge)happyHop();
+    if(!nicko._lounge)happyHop(false);
+    // the room itself brightens: tidy feels different
+    flampGlow.style.transition='opacity .6s';flampGlow.style.opacity='1';
+    setTimeout(()=>{flampGlow.style.opacity=flampOn?'1':'0';},2500);
     setTimeout(()=>{
       [ball,car,feather].forEach(t=>{
         t._tidy=false;t.style.display='';
@@ -496,8 +499,10 @@ function tidyToy(t){
 interact(ball,{onTap(){B.sPop();},onDrop(){
   if(near(ball,toybox,13)){tidyToy(ball);return;}
   if(ball._rolling)return;ball._rolling=true;
+  const batted=!nicko._lounge&&near(ball,nicko,14); // Nicko bats it himself
   let vx=(Math.random()<.5?-1:1)*(24+Math.random()*14);
   B.sBoing();
+  if(batted){B.sMeow();happyHop(false);}
   const roll=setInterval(()=>{
     let nx=ball._x+vx*0.04;vx*=0.965;
     if(nx<6){nx=6;vx*=-0.7;B.sThud();}if(nx>94){nx=94;vx*=-0.7;B.sThud();}
@@ -508,9 +513,17 @@ interact(ball,{onTap(){B.sPop();},onDrop(){
 interact(car,{onTap(){B.sPop();},onDrop(){
   if(near(car,toybox,13)){tidyToy(car);return;}
   if(car._rolling)return;car._rolling=true;
+  const noticed=!nicko._lounge&&near(car,nicko,15);
   const dir=(car._x>50?-1:1);
   $('wheel1').classList.add('wheelspin');$('wheel2').classList.add('wheelspin');
   B.sVroom();
+  if(noticed){ // Nicko scoots over to watch the car go
+    const d2=nicko._x<car._x?-1:1;
+    nicko.classList.add('walking');
+    place(nicko,Math.min(94,Math.max(6,nicko._x+d2*8)),nicko._y,19,true);
+    setTimeout(()=>nicko.classList.remove('walking'),500);
+    setTimeout(()=>B.sMeow(),450);
+  }
   let vx=dir*44,n=0;
   const roll=setInterval(()=>{
     n++;let nx=car._x+vx*0.04;vx*=0.97;
@@ -524,7 +537,7 @@ interact(feather,{onTap(){B.sPop();},onDrop(){
   if(near(feather,toybox,13)){tidyToy(feather);return;}
   if(near(feather,nicko,13)){
     feather.classList.remove('wave');void feather.offsetWidth;feather.classList.add('wave');
-    B.sChirp();happyHop();
+    B.sChirp();happyHop(false);
   }
 }});
 interact(toybox,{drag:false,onTap(){B.sPop();B.sparkles(toybox._x,toybox._y-8,6);}});
@@ -533,7 +546,7 @@ interact(toybox,{drag:false,onTap(){B.sPop();B.sparkles(toybox._x,toybox._y-8,6)
 cookies.forEach(c=>{
   interact(c,{onTap(){B.sPop();},onDrop(){
     if(near(c,nicko,10)){
-      c.style.display='none';B.sMunch();B.hearts(nicko._x,nicko._y-10);happyHop();
+      c.style.display='none';B.sMunch();B.hearts(nicko._x,nicko._y-10);happyHop(false);
       setTimeout(()=>{
         const[hx,hy]=cookieHome[c.id];c.style.display='';place(c,hx,hy,5);B.sPop();
       },5000);
@@ -547,10 +560,21 @@ interact(door,{drag:false,onTap(){B.sPop();setTimeout(()=>{window.location.href=
 /* ---------- Nicko ---------- */
 interact(nicko,{onTap(){
   if(nicko._lounge){unlounge();return;}
-  B.sMeow();happyHop();
+  B.sMeow();happyHop(false);
 },onDrop(){
   if(near(nicko,sofa,18)&&!nicko._lounge){lounge();return;}
 }});
+
+/* ---------- sofa invitation: a gentle cue, never a demand ---------- */
+let lastActL=0;
+game.addEventListener('pointerdown',()=>{lastActL=Date.now();},true);
+setInterval(()=>{
+  if(nicko._lounge||nicko.classList.contains('walking')||Date.now()-lastActL<20000)return;
+  if(Math.random()<.5){
+    B.tone(140,.8,'sine',.07,0,90); // soft purr
+    B.sparkles(sofa._x,sofa._y-12,5);
+  }
+},30000);
 $('bg').addEventListener('pointerdown',e=>{
   if(nicko._lounge)return;
   B.wakeAudio();
@@ -585,7 +609,7 @@ function init(){
   place(door,90,54,12);place(nicko,38,138,19);
   B.layout();flampGlow.style.opacity='1';
   if(window.NK){NK.room='living';if(!NK.sound){B.muted=true;$('sndOn').style.display='none';$('sndOff').style.display='';}}
-  setTimeout(()=>{B.sMeow();happyHop();},1200);
+  setTimeout(()=>{B.sMeow();happyHop(false);},1200);
 }
 window.addEventListener('resize',()=>{B.measure();B.layout();});
 window.addEventListener('orientationchange',()=>setTimeout(()=>{B.measure();B.layout();},300));
