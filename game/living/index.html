@@ -9,7 +9,7 @@
   html,body{height:100%;overflow:hidden;background:#F6E7D3;font-family:system-ui,sans-serif;
     user-select:none;-webkit-user-select:none;touch-action:none;overscroll-behavior:none}
   #game{position:fixed;inset:0;overflow:hidden}
-  #bg{position:absolute;inset:0;z-index:0}
+  #bg{position:absolute;inset:0;z-index:0;background:linear-gradient(to bottom,#F6E7D3 0%,#F6E7D3 70%,#DFA96F 70%,#DFA96F 100%)}
   .sprite{position:absolute;z-index:10;touch-action:none;cursor:pointer}
   .sprite svg{width:100%;height:100%;display:block;overflow:visible;pointer-events:none}
   .sprite.lift{z-index:40;filter:drop-shadow(0 10px 10px rgba(0,0,0,.25))}
@@ -54,7 +54,7 @@
 <body>
 <div id="game">
   <div id="bg">
-    <svg viewBox="0 0 100 160" preserveAspectRatio="xMidYMid slice" style="width:100%;height:100%;display:block">
+    <svg viewBox="0 0 100 160" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;display:block">
       <rect x="0" y="0" width="100" height="112" fill="#F6E7D3"/>
       <rect x="0" y="112" width="100" height="48" fill="#DFA96F"/>
       <g stroke="#C98F52" stroke-width=".7" opacity=".7">
@@ -276,6 +276,7 @@
   </div>
 </div><!-- /#game -->
 
+<script src="../shared.js"></script>
 <script>
 (function(){
 "use strict";
@@ -283,7 +284,7 @@ const game=document.getElementById('game');
 let S=1,OX=0,OY=0;
 function measure(){
   const w=game.clientWidth,h=game.clientHeight;
-  S=Math.max(w/100,h/160); OX=(w-100*S)/2; OY=(h-160*S)/2;
+  S=Math.min(w/100,h/160); OX=(w-100*S)/2; OY=(h-160*S)/2;
 }
 const toPx=(x,y)=>[OX+x*S,OY+y*S];
 const toUnits=(px,py)=>[(px-OX)/S,(py-OY)/S];
@@ -330,7 +331,7 @@ function sparkles(x,y,n){
     game.appendChild(s);setTimeout(()=>s.remove(),1150);
   }
 }
-let AC=null,muted=false;
+let AC=null,muted=window.NK?!NK.sound:false;
 function wakeAudio(){try{if(!AC)AC=new(window.AudioContext||window.webkitAudioContext)();if(AC.state==='suspended')AC.resume();}catch(e){}}
 function tone(f,dur,type,vol,when,slideTo){
   if(muted)return;wakeAudio();if(!AC)return;
@@ -555,6 +556,7 @@ $('bg').addEventListener('pointerdown',e=>{
   B.wakeAudio();
   const r=game.getBoundingClientRect();
   const[ux,uy]=B.toUnits(e.clientX-r.left,e.clientY-r.top);
+  if(ux<0||ux>100||uy<0||uy>160)return;
   nicko.classList.add('walking');
   place(nicko,Math.min(94,Math.max(6,ux)),Math.min(150,Math.max(60,uy)),19,true);
   B.tone(300,.18,'sine',.08,0,520);
@@ -563,7 +565,7 @@ $('bg').addEventListener('pointerdown',e=>{
 
 /* ---------- HUD ---------- */
 $('soundBtn').addEventListener('pointerdown',e=>{
-  e.stopPropagation();B.wakeAudio();B.muted=!B.muted;
+  e.stopPropagation();B.wakeAudio();B.muted=!B.muted;if(window.NK)NK.sound=!B.muted;
   $('sndOn').style.display=B.muted?'none':'';$('sndOff').style.display=B.muted?'':'none';
   if(!B.muted)B.sPop();
 });
@@ -582,6 +584,7 @@ function init(){
   place($('cookie1'),48,109,5);place($('cookie2'),52,108,5);place($('cookie3'),56,109,5);
   place(door,90,54,12);place(nicko,38,138,19);
   B.layout();flampGlow.style.opacity='1';
+  if(window.NK){NK.room='living';if(!NK.sound){B.muted=true;$('sndOn').style.display='none';$('sndOff').style.display='';}}
   setTimeout(()=>{B.sMeow();happyHop();},1200);
 }
 window.addEventListener('resize',()=>{B.measure();B.layout();});
