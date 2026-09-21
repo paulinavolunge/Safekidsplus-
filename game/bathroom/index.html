@@ -227,9 +227,9 @@ const toUnits=(px,py)=>[(px-OX)/S,(py-OY)/S];
 function place(el,x,y,w,animate){
   const[px,py]=toPx(x,y); el._x=x; el._y=y;
   const sz=w*S;
-  el.style.width=sz+'px'; el.style.height='auto';
+  el.style.width=sz+'px'; el.style.height=(sz*(el._ratio||1))+'px';
   el.style.transition=animate?'left .6s ease,top .6s ease':'';
-  el.style.left=(px-sz/2)+'px'; el.style.top=(py-sz/2)+'px';
+  el.style.left=(px-sz/2)+'px'; el.style.top=(py-sz*(el._ratio||1)/2)+'px';
 }
 function near(a,b,d){const dx=(a._x||0)-(b._x||0),dy=(a._y||0)-(b._y||0);return Math.hypot(dx,dy)<d;}
 document.querySelectorAll('.sprite[data-w]').forEach(el=>{
@@ -332,6 +332,7 @@ setInterval(()=>{
 function interact(el,{drag=true,lift=true,onTap,onDrop}={}){
   let sx,sy,ox,oy,moved,pid;
   el.addEventListener('pointerdown',e=>{
+    if(pid!=null)return; // A second finger must not steal this drag.
     e.preventDefault();e.stopPropagation();B.wakeAudio();
     pid=e.pointerId;sx=e.clientX;sy=e.clientY;
     ox=el._x||0;oy=el._y||0;moved=false;
@@ -350,6 +351,7 @@ function interact(el,{drag=true,lift=true,onTap,onDrop}={}){
   const up=e=>{
     if(e.pointerId!==pid)return;pid=null;
     el.classList.remove('lift');nicko.classList.remove('walking');
+    if(e.type==='pointercancel')return; // Cancellation is not a completed action.
     if(!moved&&onTap)onTap();
     else if(moved&&onDrop)onDrop();
   };
